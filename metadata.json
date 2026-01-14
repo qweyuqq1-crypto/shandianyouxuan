@@ -1,0 +1,5 @@
+{
+  "name": "闪电面板",
+  "description": "A high-performance management panel for monitoring and exporting Cloudflare optimized IPs by region (HK, JP, TW, KR) with automated SNI configuration and visualization.",
+  "requestFramePermissions": []
+}
