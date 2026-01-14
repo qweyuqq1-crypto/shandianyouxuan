@@ -1,13 +1,13 @@
 
 /**
- * CLOUDFLARE WORKER CODE
- * Deploy this script as a Cloudflare Worker.
+ * CLOUDFLARE WORKER 后端代码
+ * 请将此脚本部署为 Cloudflare Worker。
  */
 
 interface Env {
   IP_SOURCES?: string; 
   ALLOWED_ORIGIN?: string;
-  UUID?: string; // Optional: Override default UUID
+  UUID?: string; // 可选：覆盖默认 UUID
 }
 
 const DEFAULT_SOURCES: Record<string, string> = {
@@ -15,6 +15,14 @@ const DEFAULT_SOURCES: Record<string, string> = {
   JP: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/JP.json',
   TW: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/TW.json',
   KR: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/KR.json',
+};
+
+const REGION_NAME_MAP: Record<string, string> = {
+  HK: '香港',
+  JP: '日本',
+  TW: '台湾',
+  KR: '韩国',
+  ALL: '全球'
 };
 
 const SNI_MAP: Record<string, string> = {
@@ -38,13 +46,13 @@ function unifyData(raw: any, region: string): any[] {
 
 function generateVLESS(ip: string, region: string, uuid: string = '00000000-0000-0000-0000-000000000000'): string {
   const sni = SNI_MAP[region] || SNI_MAP.ALL;
-  const regionLabel = region === 'ALL' ? 'Global' : region;
-  const name = encodeURIComponent(`CF-${regionLabel}-${ip}`);
+  const regionLabel = REGION_NAME_MAP[region] || '通用';
+  const name = encodeURIComponent(`闪电-${regionLabel}-${ip}`);
   return `vless://${uuid}@${ip}:443?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=%2F%3Fed%3D2048#${name}`;
 }
 
 /**
- * Robust UTF-8 to Base64 encoding for Cloudflare Workers
+ * 适用于 Cloudflare Workers 的鲁棒 UTF-8 转 Base64 编码
  */
 function safeBtoa(str: string): string {
   const bytes = new TextEncoder().encode(str);
@@ -89,8 +97,12 @@ export default {
     };
 
     if (url.pathname === '/api/ips') {
-      const results = await fetchAll();
-      return new Response(JSON.stringify(results), { status: 200, headers: corsHeaders });
+      try {
+        const results = await fetchAll();
+        return new Response(JSON.stringify(results), { status: 200, headers: corsHeaders });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: '数据抓取失败' }), { status: 500, headers: corsHeaders });
+      }
     }
 
     if (url.pathname === '/api/sub') {
@@ -105,14 +117,14 @@ export default {
           headers: {
             ...corsHeaders,
             'Content-Type': 'text/plain; charset=utf-8',
-            'Content-Disposition': `attachment; filename="cf_sub_${targetRegion.toLowerCase()}.txt"`
+            'Content-Disposition': `attachment; filename="闪电订阅_${targetRegion.toLowerCase()}.txt"`
           }
         });
       } catch (e) {
-        return new Response(`Error: ${String(e)}`, { status: 500, headers: corsHeaders });
+        return new Response(`错误: ${String(e)}`, { status: 500, headers: corsHeaders });
       }
     }
 
-    return new Response('Not Found', { status: 404 });
+    return new Response('资源不存在', { status: 404, headers: corsHeaders });
   }
 };

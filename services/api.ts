@@ -2,7 +2,7 @@
 import { Region, IPData } from '../types';
 
 /**
- * Mock data for development when not deployed on Cloudflare
+ * 开发环境模拟数据（当 API 无法访问时使用）
  */
 const MOCK_IPS: IPData[] = [
   { ip: '1.1.1.1', latency: 45, speed: 85.2, region: Region.HK, updated_at: new Date().toISOString() },
@@ -14,12 +14,12 @@ const MOCK_IPS: IPData[] = [
 
 export async function fetchIPs(region: Region): Promise<IPData[]> {
   try {
-    // In local development, /api/ips might fail unless proxied, so we fallback to mock
+    // 尝试请求真实 Worker API
     const response = await fetch(`/api/ips?region=${region}`);
-    if (!response.ok) throw new Error('Network response was not ok');
+    if (!response.ok) throw new Error('网络响应异常');
     return await response.json();
   } catch (error) {
-    console.warn('API call failed, using mock data for demonstration:', error);
+    console.warn('API 请求失败，正在切换至模拟数据进行演示:', error);
     if (region === Region.ALL) return MOCK_IPS;
     return MOCK_IPS.filter(ip => ip.region === region);
   }

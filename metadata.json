@@ -1,5 +1,5 @@
 {
   "name": "闪电面板",
-  "description": "A high-performance management panel for monitoring and exporting Cloudflare optimized IPs by region (HK, JP, TW, KR) with automated SNI configuration and visualization.",
+  "description": "高性能 Cloudflare 优选 IP 监控与管理面板。支持按地区（香港、日本、台湾、韩国）筛选、自动 SNI 配置导出、可视化测速数据展示及 VLESS 订阅聚合。",
   "requestFramePermissions": []
 }
