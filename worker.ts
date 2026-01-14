@@ -1,5 +1,5 @@
 /**
- * CLOUDFLARE WORKER 后端代码 (纯 JS 兼容版)
+ * CLOUDFLARE WORKER 后端代码 (纯 JS 兼容版 - 已修复语法错误)
  */
 
 const DEFAULT_SOURCES = {
@@ -69,27 +69,22 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
       'Content-Type': 'application/json; charset=utf-8',
     };
 
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-    // 路由: 基础信息
     if (url.pathname === '/' || url.pathname === '') {
       return new Response(JSON.stringify({
         status: "online",
-        message: "闪电面板 API 运行中",
-        config: {
-          has_uuid: !!env.UUID,
-          custom_sources: !!env.IP_SOURCES
-        }
+        message: "闪电面板 API 运行中"
       }), { status: 200, headers: corsHeaders });
     }
 
     const targetRegion = url.searchParams.get('region') || 'ALL';
     let sources = DEFAULT_SOURCES;
     
-    // 解析自定义源
     if (env.IP_SOURCES) {
       try {
         sources = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES;
@@ -98,33 +93,34 @@ export default {
 
     const fetchRegionData = async (reg, endpoint) => {
       try {
-        // Fix: Cast fetch options to any to allow 'cf' property which is Cloudflare specific and missing from standard RequestInit
+        // 使用 "as any" 绕过 TypeScript 对 Cloudflare 专用 'cf' 属性的类型检查
+        // @ts-ignore: Cloudflare worker specific 'cf' property
         const res = await fetch(endpoint, { 
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
           cf: { cacheTtl: 600, cacheEverything: true } 
         } as any);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
         return unifyData(data, reg);
       } catch (e) {
-        console.error(`Fetch Error [${reg}]:`, e.message);
+        console.error("Fetch Error [" + reg + "]:", e.message);
         return [];
       }
     };
 
-    // 获取所有数据
     const fetchAll = async () => {
       if (targetRegion === 'ALL') {
         const fetchPromises = Object.entries(sources).map(([reg, endpoint]) => fetchRegionData(reg, endpoint));
         const allRes = await Promise.all(fetchPromises);
-        return allRes.flat().sort((a, b) => a.latency - b.latency);
+        let combined = [];
+        for (const res of allRes) combined = combined.concat(res);
+        return combined.sort((a, b) => a.latency - b.latency);
       } else if (sources[targetRegion]) {
         return await fetchRegionData(targetRegion, sources[targetRegion]);
       }
       return [];
     };
 
-    // 接口: 获取 IP 列表
     if (url.pathname === '/api/ips') {
       const results = await fetchAll();
       return new Response(JSON.stringify({
@@ -134,7 +130,6 @@ export default {
       }), { status: 200, headers: corsHeaders });
     }
 
-    // 接口: 订阅链接
     if (url.pathname === '/api/sub') {
       const results = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
