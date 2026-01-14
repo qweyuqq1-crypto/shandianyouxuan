@@ -1,36 +1,33 @@
 
 # 部署指南 - 闪电面板 (Lightning Panel)
 
-本系统采用 **Cloudflare Pages (前端)** + **Cloudflare Workers (后端 API)** 的架构部署。
+本系统采用 **Cloudflare Pages (前端)** + **Cloudflare Workers (后端 API)** 的架构。
 
 ## 1. 部署后端 (Workers)
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)。
 2. 进入 **Workers & Pages** -> **Create application** -> **Create Worker**。
-3. 命名为 `lightning-ip-api`。
-4. 将 `worker.ts` 中的代码粘贴到编辑器中并保存。
-5. **设置环境变量**（必选）：
-   - 在 Worker 的 **Settings** -> **Variables** 中添加 `IP_SOURCES`。
-   - 格式为 JSON 字符串，例如：
-     ```json
-     {"HK":"https://raw.githubusercontent.com/.../HK.json","JP":"https://raw.githubusercontent.com/.../JP.json"}
-     ```
+3. 将 `worker.ts` (纯 JS 兼容版) 中的代码粘贴到编辑器并 **Save and Deploy**。
+4. **设置环境变量**：
+   - 进入 Worker -> **Settings** -> **Variables**。
+   - 添加 `IP_SOURCES`：填入 JSON 格式的源（例如：`{"HK":"URL1","JP":"URL2"}`）。
+   - 添加 `UUID`：你的 VLESS 用户 ID（可选）。
 
-## 2. 部署前端 (Pages)
-1. 进入 **Workers & Pages** -> **Create application** -> **Pages**。
-2. 选择 **Connect to Git** 或 **Direct Upload**。
-3. **构建设置** (重要，防止部署失败)：
-   - **Framework preset**: `Vite`
-   - **Build command**: `npm run build`
-   - **Output directory**: `dist`
-   - **Node.js version**: 确保为 `18` 或更高版本。
-4. **API 转发绑定**:
-   - 在 Pages 项目的 **Settings** -> **Functions** 中，将 `/api` 路径绑定到你创建的 `lightning-ip-api` Worker。
+## 2. 绑定前后端 (关键步骤)
+你有两种方式让前端 Pages 访问到后端 Worker：
 
-## 3. 常见问题排查 (Troubleshooting)
-- **构建报错**: 确保仓库根目录下包含 `package.json` 和 `vite.config.ts`。
-- **数据加载失败**: 检查 Worker 的 CORS 设置，确保 `ALLOWED_ORIGIN` 包含你的 Pages 域名。
-- **二维码显示异常**: 确保 `qrcode.react` 已正确安装并导入。
+### 方案 A：在 Pages 中设置服务绑定 (推荐)
+1. 进入 **Pages 项目** -> **Settings** -> **Functions**。
+2. 在 **Service Bindings** 处点击 **Add binding**。
+3. **Variable name** 填 `API`，**Service** 选择你的 Worker。
+4. 这种方式不需要额外配置路由，Pages 会自动处理。
 
-## 4. UI 优化特性
-- **闪电动态**: 系统图标与测速条具有实时动画反馈。
-- **电磁感应风格**: 琥珀黄与深邃蓝的暗色系搭配，极具科技感。
+### 方案 B：在 Worker 中设置路由触发器
+1. 进入 **Worker 项目** -> **Settings** -> **Triggers**。
+2. 点击 **Add Route**。
+3. **Route**: `你的Pages域名/api/*` (例如 `lightning.pages.dev/api/*`)。
+4. **Zone**: 选择关联的域名区域。
+
+## 3. 常见问题
+- **404 错误**: 检查路由是否以 `/api/*` 结尾。
+- **跨域 (CORS)**: Worker 代码已默认开启 CORS，若仍有问题，请在 Worker 环境变量中设置 `ALLOWED_ORIGIN`。
+- **数据不显示**: 检查 `IP_SOURCES` 的 JSON 格式是否正确。
