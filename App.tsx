@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCcw, Database, Info, Share2, Check, Copy, Zap, Activity, ShieldCheck, Cpu } from 'lucide-react';
+import { RefreshCcw, Database, Info, Share2, Check, Copy, Zap, Activity, ShieldCheck, Cpu, Globe, Lock } from 'lucide-react';
 import { Region, IPData, IPStats } from './types';
 import { REGION_CONFIG } from './constants';
 import { fetchIPs } from './services/api';
@@ -72,7 +72,7 @@ const App: React.FC = () => {
               <h1 className="text-xl sm:text-2xl font-black tracking-tighter text-white flex items-center gap-1">
                 闪电<span className="text-yellow-400">面板</span>
               </h1>
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">闪电边缘优化面板</p>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">CF 优选监控系统</p>
             </div>
           </div>
 
@@ -174,13 +174,35 @@ const App: React.FC = () => {
                </div>
             </div>
 
+            {/* 数据源信息卡片 */}
+            <div className="glass-effect rounded-[32px] p-7 border border-white/5 relative overflow-hidden">
+               <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                 <Globe className="w-4 h-4 text-blue-400" />
+                 测速数据源
+               </h3>
+               <div className="space-y-3">
+                 <div className="flex items-start gap-3">
+                   <div className="p-2 bg-white/5 rounded-lg border border-white/10 mt-0.5">
+                     <Info className="w-3 h-3 text-slate-400" />
+                   </div>
+                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                     当前采用 <span className="text-blue-400">cmliu/CF-Optimized-IP</span> 社区公共测速源，每小时自动更新。
+                   </p>
+                 </div>
+                 <div className="flex items-center gap-2 px-3 py-2 bg-green-500/5 border border-green-500/10 rounded-xl">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">云端实时同步中</span>
+                 </div>
+               </div>
+            </div>
+
             <div className="glass-effect rounded-[32px] p-7 border border-white/5 bg-gradient-to-br from-yellow-950/20 to-blue-950/20 relative overflow-hidden group">
               <div className="absolute -bottom-10 -right-10 opacity-5 group-hover:scale-125 transition-transform duration-700">
                 <Zap className="w-40 h-40 text-yellow-400" />
               </div>
               <h3 className="text-lg font-black text-white mb-2 tracking-tight">配置聚合订阅</h3>
               <p className="text-slate-500 text-xs mb-8 leading-relaxed font-medium">
-                获取当前地区所有优选 IP 的 VLESS 聚合链接，支持一键导入主流代理工具。
+                获取当前地区所有优选 IP 的 VLESS 聚合链接。请确保已在 Worker 中配置 <span className="text-yellow-400">UUID</span>。
               </p>
               <button 
                 onClick={copySubscription}
