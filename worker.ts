@@ -1,14 +1,10 @@
 
 /**
  * CLOUDFLARE WORKER 后端代码
- * 请将此脚本部署为 Cloudflare Worker。
+ * 
+ * 提示：如果在 Cloudflare 控制台报错 "Unexpected strict mode reserved word"，
+ * 请确保您的 Worker 文件名以 .ts 结尾（例如 index.ts）。
  */
-
-interface Env {
-  IP_SOURCES?: string; 
-  ALLOWED_ORIGIN?: string;
-  UUID?: string; // 可选：覆盖默认 UUID
-}
 
 const DEFAULT_SOURCES: Record<string, string> = {
   HK: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/HK.json',
@@ -51,9 +47,6 @@ function generateVLESS(ip: string, region: string, uuid: string = '00000000-0000
   return `vless://${uuid}@${ip}:443?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=%2F%3Fed%3D2048#${name}`;
 }
 
-/**
- * 适用于 Cloudflare Workers 的鲁棒 UTF-8 转 Base64 编码
- */
 function safeBtoa(str: string): string {
   const bytes = new TextEncoder().encode(str);
   let binString = "";
@@ -64,7 +57,7 @@ function safeBtoa(str: string): string {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: any): Promise<Response> {
     const url = new URL(request.url);
     const corsHeaders = {
       'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || '*',
@@ -77,7 +70,16 @@ export default {
     }
 
     const targetRegion = url.searchParams.get('region') || 'ALL';
-    const sources = env.IP_SOURCES ? JSON.parse(env.IP_SOURCES) : DEFAULT_SOURCES;
+    
+    // 安全解析环境变量
+    let sources = DEFAULT_SOURCES;
+    if (env.IP_SOURCES) {
+      try {
+        sources = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES;
+      } catch (e) {
+        console.error('IP_SOURCES 解析失败:', e);
+      }
+    }
 
     const fetchAll = async () => {
       let results: any[] = [];
@@ -90,8 +92,10 @@ export default {
         });
         results = (await Promise.all(fetchPromises)).flat();
       } else if (sources[targetRegion]) {
-        const res = await fetch(sources[targetRegion]);
-        results = unifyData(await res.json(), targetRegion);
+        try {
+          const res = await fetch(sources[targetRegion]);
+          results = unifyData(await res.json(), targetRegion);
+        } catch (e) { results = []; }
       }
       return results.sort((a, b) => a.latency - b.latency);
     };
@@ -117,14 +121,14 @@ export default {
           headers: {
             ...corsHeaders,
             'Content-Type': 'text/plain; charset=utf-8',
-            'Content-Disposition': `attachment; filename="闪电订阅_${targetRegion.toLowerCase()}.txt"`
+            'Content-Disposition': `attachment; filename="lightning_sub_${targetRegion.toLowerCase()}.txt"`
           }
         });
       } catch (e) {
-        return new Response(`错误: ${String(e)}`, { status: 500, headers: corsHeaders });
+        return new Response(`Error: ${String(e)}`, { status: 500, headers: corsHeaders });
       }
     }
 
-    return new Response('资源不存在', { status: 404, headers: corsHeaders });
+    return new Response('API Route Not Found', { status: 404, headers: corsHeaders });
   }
 };
