@@ -46,7 +46,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl">
       <div className="bg-[#1e293b] rounded-[40px] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10 animate-in fade-in zoom-in duration-300">
         
-        {/* Header */}
+        {/* 头部 */}
         <div className="p-8 border-b border-white/5 flex justify-between items-start bg-white/5 relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none"></div>
           <div>
@@ -56,7 +56,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
               </div>
               <div>
                 <h3 className="text-2xl font-black text-white tracking-tight">节点导出面板</h3>
-                <p className="text-xs font-black text-blue-400 uppercase tracking-[0.2em]">{REGION_CONFIG[ip.region]?.label} EDGE SERVER</p>
+                <p className="text-xs font-black text-blue-400 uppercase tracking-[0.2em]">{REGION_CONFIG[ip.region]?.label} 边缘服务器</p>
               </div>
             </div>
           </div>
@@ -67,7 +67,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-0">
           
-          {/* Sidebar Tabs */}
+          {/* 侧边切换栏 */}
           <div className="md:col-span-1 bg-black/20 p-4 flex md:flex-row md:flex-col gap-2">
             <button 
               onClick={() => setShowQR(false)}
@@ -83,27 +83,27 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
             </button>
           </div>
 
-          {/* Content Area */}
+          {/* 内容区域 */}
           <div className="md:col-span-4 p-8 max-h-[70vh] overflow-y-auto no-scrollbar">
             {!showQR ? (
               <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                 
-                {/* Meta Cards */}
+                {/* 信息卡片 */}
                 <div className="grid grid-cols-2 gap-4">
                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Target IP</p>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> 目标 IP</p>
                       <p className="text-sm font-mono font-bold text-white">{ip.ip}</p>
                    </div>
                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> Preferred SNI</p>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Cpu className="w-3 h-3" /> 伪装域名 (SNI)</p>
                       <p className="text-sm font-mono font-bold text-blue-400 truncate">{sni}</p>
                    </div>
                 </div>
 
-                {/* V2Ray Link */}
+                {/* V2Ray 链接 */}
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Universal VLESS URI</label>
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">通用 VLESS 订阅链接</label>
                   </div>
                   <div className="flex gap-2">
                     <div className="flex-1 bg-black/30 border border-white/5 rounded-2xl px-5 py-4 text-xs font-mono text-slate-300 overflow-hidden truncate">
@@ -114,20 +114,20 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
                       className="bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40 active:scale-95 flex items-center gap-2"
                     >
                       {copied === 'v2ray' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      {copied === 'v2ray' ? 'OK' : 'Copy'}
+                      {copied === 'v2ray' ? '已完成' : '复制'}
                     </button>
                   </div>
                 </div>
 
-                {/* Clash Config Snippet */}
+                {/* Clash 配置 */}
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Clash Configuration Template</label>
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Clash 配置模板片段</label>
                     <button 
                       onClick={() => copyToClipboard(clashConfig, 'clash')}
                       className="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors"
                     >
-                      {copied === 'clash' ? 'Copied' : 'Copy Snippet'}
+                      {copied === 'clash' ? '已复制' : '复制片段'}
                     </button>
                   </div>
                   <div className="relative group">
@@ -150,8 +150,8 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
                   />
                 </div>
                 <div className="mt-8">
-                   <h4 className="text-white font-black text-lg">Scan to Import</h4>
-                   <p className="text-slate-500 text-sm mt-1 max-w-[280px] font-medium">Use any client that supports VLESS over WebSocket to quickly add this node.</p>
+                   <h4 className="text-white font-black text-lg">扫码导入节点</h4>
+                   <p className="text-slate-500 text-sm mt-1 max-w-[280px] font-medium">使用任何支持 VLESS over WebSocket 的客户端快速扫描添加此节点。</p>
                 </div>
                 
                 <div className="flex gap-4 mt-8">
@@ -160,7 +160,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
                     className="px-8 py-4 bg-white text-slate-900 font-black rounded-2xl hover:bg-slate-100 transition-all shadow-2xl shadow-black/20 flex items-center gap-3 text-[10px] uppercase tracking-[0.2em]"
                   >
                     {copied === 'v2ray-qr' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    Copy Node Link
+                    复制节点链接
                   </button>
                 </div>
               </div>
@@ -168,13 +168,13 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ ip, onClose }) => {
           </div>
         </div>
 
-        {/* Footer */}
+        {/* 页脚 */}
         <div className="p-6 bg-black/20 border-t border-white/5 flex justify-center">
           <button 
             onClick={onClose}
             className="px-10 py-3 bg-white/5 hover:bg-white/10 text-slate-300 font-black text-xs uppercase tracking-widest rounded-2xl transition-all border border-white/10"
           >
-            Close Terminal
+            关闭控制台
           </button>
         </div>
       </div>

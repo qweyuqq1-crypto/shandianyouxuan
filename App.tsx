@@ -22,7 +22,7 @@ const App: React.FC = () => {
       setIps(data);
       setLastRefreshed(new Date());
     } catch (err) {
-      console.error('Failed to load IPs', err);
+      console.error('无法加载 IP 数据', err);
     } finally {
       setLoading(false);
     }
@@ -54,11 +54,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen text-slate-100 flex flex-col selection:bg-yellow-500/30">
-      {/* Background Ambience */}
+      {/* 背景光晕 */}
       <div className="fixed top-[-10%] right-[-10%] w-[600px] h-[600px] bg-yellow-600/10 blur-[150px] rounded-full -z-10 animate-pulse pointer-events-none"></div>
       <div className="fixed bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-blue-600/10 blur-[150px] rounded-full -z-10 animate-pulse pointer-events-none"></div>
 
-      {/* Header / Navbar */}
+      {/* 顶部导航 */}
       <nav className="sticky top-0 z-40 glass-effect border-b border-white/5 px-4 sm:px-8 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-5">
@@ -72,7 +72,7 @@ const App: React.FC = () => {
               <h1 className="text-xl sm:text-2xl font-black tracking-tighter text-white flex items-center gap-1">
                 闪电<span className="text-yellow-400">面板</span>
               </h1>
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">Lightning Edge Panel</p>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">闪电边缘优化面板</p>
             </div>
           </div>
 
@@ -105,10 +105,10 @@ const App: React.FC = () => {
         </div>
       </nav>
 
-      {/* Main Container */}
+      {/* 主容器 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 w-full flex-grow">
         
-        {/* Region Quick Switcher (Mobile) */}
+        {/* 区域快速切换 (移动端) */}
         <div className="lg:hidden flex overflow-x-auto pb-6 gap-3 no-scrollbar">
           {tabs.map((tab) => (
             <button
@@ -127,14 +127,14 @@ const App: React.FC = () => {
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
           
-          {/* Status Column */}
+          {/* 状态统计栏 */}
           <div className="xl:col-span-1 space-y-6">
             <div className="glass-effect rounded-[32px] p-7 border border-white/5 shadow-2xl relative overflow-hidden group">
                <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 blur-3xl rounded-full -mr-16 -mt-16"></div>
                <div className="flex items-center justify-between mb-8">
                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                     <Activity className="w-4 h-4 text-yellow-400" />
-                    Network Pulse
+                    网络脉动
                   </h3>
                   <div className="flex gap-1">
                     {[1, 2, 3].map(i => <div key={i} className={`w-1 h-3 rounded-full animate-bounce bg-yellow-500/50`} style={{animationDelay: `${i*0.1}s`}}></div>)}
@@ -144,7 +144,7 @@ const App: React.FC = () => {
                <div className="space-y-8">
                   <div className="relative">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Avg Latency</span>
+                      <span className="text-xs font-black text-slate-500 uppercase tracking-widest">平均延迟</span>
                       <span className="text-2xl font-black text-yellow-400">{stats.avgLatency.toFixed(1)} <span className="text-xs text-slate-600">ms</span></span>
                     </div>
                     <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
@@ -158,17 +158,17 @@ const App: React.FC = () => {
                   <div className="flex items-center justify-between p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
                     <div className="flex items-center gap-3">
                        <ShieldCheck className="w-5 h-5 text-blue-400" />
-                       <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Active Nodes</span>
+                       <span className="text-xs font-black text-slate-400 uppercase tracking-widest">在线节点</span>
                     </div>
                     <span className="text-xl font-black text-blue-400">{stats.count}</span>
                   </div>
 
                   <div className="pt-4">
                     <p className="text-[10px] text-slate-600 uppercase font-black mb-3 tracking-[0.2em] flex items-center gap-2">
-                      <Cpu className="w-3 h-3" /> Fastest Gateway
+                      <Cpu className="w-3 h-3" /> 最优网关
                     </p>
                     <div className="bg-black/30 px-4 py-4 rounded-2xl border border-white/5 font-mono text-xs text-yellow-200/80 truncate group-hover:border-yellow-500/30 transition-colors">
-                      {stats.fastestIP || 'DISCONNECTED'}
+                      {stats.fastestIP || '未连接'}
                     </div>
                   </div>
                </div>
@@ -191,23 +191,23 @@ const App: React.FC = () => {
                 }`}
               >
                 {subCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                {subCopied ? 'Copied Successfully' : 'Get Subscription'}
+                {subCopied ? '复制成功' : '获取订阅链接'}
               </button>
             </div>
           </div>
 
-          {/* Table Column */}
+          {/* 表格栏 */}
           <div className="xl:col-span-3">
              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
                 <div className="flex items-center gap-4">
                    <div className="text-4xl filter drop-shadow-lg">{REGION_CONFIG[activeRegion].emoji}</div>
                    <div>
                       <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tighter">
-                        {REGION_CONFIG[activeRegion].label} <span className="text-slate-600 font-light">Nodes</span>
+                        {REGION_CONFIG[activeRegion].label} <span className="text-slate-600 font-light">节点列表</span>
                       </h2>
                       <div className="flex items-center gap-2 text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1">
                         <Database className="w-3 h-3" />
-                        Last Synced: {lastRefreshed.toLocaleTimeString()}
+                        最后同步: {lastRefreshed.toLocaleTimeString()}
                       </div>
                    </div>
                 </div>
@@ -223,7 +223,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Brand Footer */}
+        {/* 品牌页脚 */}
         <footer className="mt-24 py-12 border-t border-white/5">
           <div className="flex flex-col md:flex-row justify-between items-center gap-8">
             <div className="flex items-center gap-4">
@@ -232,16 +232,16 @@ const App: React.FC = () => {
               </div>
               <div>
                 <span className="text-white font-black text-sm tracking-tight">闪电面板 LIGHTNING</span>
-                <p className="text-[9px] text-slate-600 uppercase font-black tracking-widest">Next-Gen Edge Optimization</p>
+                <p className="text-[9px] text-slate-600 uppercase font-black tracking-widest">新一代边缘优化技术</p>
               </div>
             </div>
             
             <p className="text-slate-600 text-[10px] font-black tracking-[0.3em] uppercase">
-              &copy; 2024 LIGHTNING PANEL <span className="text-yellow-500/50 mx-2">|</span> V1.5.0 STABLE
+              &copy; 2024 闪电面板 <span className="text-yellow-500/50 mx-2">|</span> V1.5.0 稳定版
             </p>
             
             <div className="flex gap-8">
-              {['Status', 'Docs', 'Support'].map(link => (
+              {['状态', '文档', '支持'].map(link => (
                 <a key={link} href="#" className="text-slate-500 hover:text-yellow-400 text-[10px] font-black uppercase tracking-[0.2em] transition-all">{link}</a>
               ))}
             </div>
@@ -249,7 +249,7 @@ const App: React.FC = () => {
         </footer>
       </main>
 
-      {/* Detail Modal */}
+      {/* 详情模态框 */}
       {selectedIP && (
         <ConfigModal 
           ip={selectedIP} 
