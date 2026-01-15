@@ -1,9 +1,9 @@
 /**
- * CLOUDFLARE WORKER 后端代码
- * 增强逻辑版：支持灵活配置源与国家筛选
+ * CLOUDFLARE WORKER 后端代码 (纯 JS 兼容版)
+ * 修复了 TypeScript 语法导致的部署错误
  */
 
-// 默认源：如果环境变量未配置，则回退到此
+// 默认数据源
 const DEFAULT_SOURCES = {
   HK: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/HK.json',
   JP: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/JP.json',
@@ -11,7 +11,14 @@ const DEFAULT_SOURCES = {
   KR: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/KR.json',
 };
 
-const REGION_NAME_MAP = { HK: '香港', JP: '日本', TW: '台湾', KR: '韩国', ALL: '全球' };
+const REGION_NAME_MAP = {
+  HK: '香港',
+  JP: '日本',
+  TW: '台湾',
+  KR: '韩国',
+  ALL: '全球'
+};
+
 const SNI_MAP = {
   HK: 'ProxyIP.HK.CMLiussss.Net',
   JP: 'ProxyIP.JP.CMLiussss.Net',
@@ -20,20 +27,18 @@ const SNI_MAP = {
   ALL: 'ProxyIP.Global.CMLiussss.Net'
 };
 
-/**
- * 统一数据处理：
- * 自动识别不同的 JSON 结构 (数组或带 list 的对象)
- */
 function unifyData(raw, region) {
+  // 兼容多种 JSON 结构
   const list = Array.isArray(raw) ? raw : (raw.list || raw.data || raw.info || []);
   return list.map((item) => {
     const ip = item.ip || item.address || item.ipAddress || item.IP;
     if (!ip) return null;
-    
-    // 自动清洗延迟和速度数据
+
+    // 清洗延迟数据
     let lat = item.latency || item.ping || 0;
     if (typeof lat === 'string') lat = parseInt(lat.replace(/[^0-9]/g, '')) || 0;
     
+    // 清洗速度数据
     let spd = item.speed || item.downloadSpeed || 0;
     if (typeof spd === 'string') spd = parseFloat(spd.replace(/[^0-9.]/g, '')) || 0;
 
@@ -44,7 +49,7 @@ function unifyData(raw, region) {
       region: region,
       updated_at: item.updated_at || item.time || new Date().toISOString()
     };
-  }).filter(Boolean);
+  }).filter(item => item !== null);
 }
 
 function generateVLESS(ip, region, uuid = '00000000-0000-0000-0000-000000000000') {
@@ -62,7 +67,7 @@ function safeBtoa(str) {
       binString += String.fromCharCode(bytes[i]);
     }
     return btoa(binString);
-  } catch(e) { return ""; }
+  } catch (e) { return ""; }
 }
 
 export default {
@@ -74,26 +79,28 @@ export default {
       'Content-Type': 'application/json; charset=utf-8',
     };
 
-    if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
 
+    // 路由处理：统一去掉末尾斜杠
     const path = url.pathname.replace(/\/$/, '');
     const targetRegion = url.searchParams.get('region') || 'ALL';
     
-    // 动态解析配置源
+    // 配置源优先级：环境变量 IP_SOURCES > 默认值
     let sources = DEFAULT_SOURCES;
     if (env.IP_SOURCES) {
       try {
-        const customSources = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES;
-        sources = { ...DEFAULT_SOURCES, ...customSources };
-      } catch (e) {
-        console.error('IP_SOURCES Parse Error');
-      }
+        const custom = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES;
+        sources = Object.assign({}, DEFAULT_SOURCES, custom);
+      } catch (e) {}
     }
 
     const fetchAll = async () => {
-      const fetchRegionData = async (reg, endpoint) => {
+      const fetchOne = async (reg, endpoint) => {
         try {
-          // Cloudflare Worker 默认缓存 600 秒以减轻源站压力
+          // 在 Worker 环境中，fetch 的第二个参数可以包含 cf 对象进行缓存优化
+          // Fix: Cast to any to bypass TypeScript's standard RequestInit check as 'cf' is a Cloudflare-specific extension
           const res = await fetch(endpoint, { cf: { cacheTtl: 600 } } as any);
           const data = await res.json();
           return unifyData(data, reg);
@@ -101,41 +108,44 @@ export default {
       };
 
       if (targetRegion === 'ALL') {
-        const promises = Object.entries(sources).map(([reg, endpoint]) => fetchRegionData(reg, endpoint));
+        const promises = Object.entries(sources).map(([reg, endpoint]) => fetchOne(reg, endpoint));
         const results = await Promise.all(promises);
         return results.flat().sort((a, b) => a.latency - b.latency);
       } else if (sources[targetRegion]) {
-        return await fetchRegionData(targetRegion, sources[targetRegion]);
+        return await fetchOne(targetRegion, sources[targetRegion]);
       }
       return [];
     };
 
-    // 路由：获取 IP 列表
+    // 匹配路由 /api/ips 或 /ips
     if (path === '/api/ips' || path === '/ips') {
-      const data = await fetchAll();
-      return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders });
+      const results = await fetchAll();
+      return new Response(JSON.stringify(results), { status: 200, headers: corsHeaders });
     }
 
-    // 路由：获取订阅链接
+    // 匹配路由 /api/sub 或 /sub
     if (path === '/api/sub' || path === '/sub') {
-      const data = await fetchAll();
+      const results = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
-      const vlessContent = data.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
-      return new Response(safeBtoa(vlessContent), {
+      const vlessLinks = results.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
+      return new Response(safeBtoa(vlessLinks), {
         status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'text/plain; charset=utf-8' 
+        }
       });
     }
 
-    // 状态探针
+    // 根目录或 /api 提示
     if (path === '' || path === '/' || path === '/api') {
-      return new Response(JSON.stringify({ 
-        status: "online", 
+      return new Response(JSON.stringify({
+        status: "online",
         regions: Object.keys(sources),
-        active_sources: sources 
-      }), { headers: corsHeaders });
+        message: "Lightning Panel API is ready"
+      }), { status: 200, headers: corsHeaders });
     }
 
-    return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Route Not Found', path }), { status: 404, headers: corsHeaders });
   }
 };
