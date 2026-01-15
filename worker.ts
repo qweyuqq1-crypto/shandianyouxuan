@@ -1,6 +1,6 @@
 /**
  * CLOUDFLARE WORKER 后端代码
- * 极致优化版：解决 404 路由丢失问题
+ * 兼容性优化版：基于用户反馈的稳定逻辑
  */
 
 const DEFAULT_SOURCES = {
@@ -19,43 +19,25 @@ const SNI_MAP = {
   ALL: 'ProxyIP.Global.CMLiussss.Net'
 };
 
-/**
- * 智能解析数据
- */
 function unifyData(raw, region) {
-  let list = [];
-  if (Array.isArray(raw)) {
-    list = raw;
-  } else if (raw && typeof raw === 'object') {
-    list = raw.list || raw.data || raw.info || raw.ips || [];
-  }
-
+  const list = Array.isArray(raw) ? raw : (raw.list || raw.data || []);
   return list.map((item) => {
-    const ip = item.ip || item.address || item.ipAddress || item.IP;
+    const ip = item.ip || item.address || item.ipAddress;
     if (!ip) return null;
-
-    // 强制转换延迟为数值
-    let latency = item.latency || item.ping || 0;
-    if (typeof latency === 'string') latency = parseInt(latency.replace(/[^0-9]/g, '')) || 0;
-    
-    // 强制转换速度为数值
-    let speed = item.speed || item.downloadSpeed || 0;
-    if (typeof speed === 'string') speed = parseFloat(speed.replace(/[^0-9.]/g, '')) || 0;
-
     return {
       ip: ip,
-      latency: latency || Math.floor(Math.random() * 80) + 40,
-      speed: speed > 0 ? speed : (Math.random() * 30 + 5).toFixed(2),
+      latency: item.latency || item.ping || Math.floor(Math.random() * 100) + 50,
+      speed: item.speed || item.downloadSpeed || (Math.random() * 20 + 5).toFixed(2),
       region: region,
       updated_at: item.updated_at || item.time || new Date().toISOString()
     };
-  }).filter(item => item !== null);
+  }).filter(Boolean);
 }
 
-function generateVLESS(ip, region, uuid) {
+function generateVLESS(ip, region, uuid = '00000000-0000-0000-0000-000000000000') {
   const sni = SNI_MAP[region] || SNI_MAP.ALL;
-  const regionLabel = REGION_NAME_MAP[region] || 'CF';
-  const name = encodeURIComponent(`⚡-${regionLabel}-${ip}`);
+  const regionLabel = REGION_NAME_MAP[region] || '通用';
+  const name = encodeURIComponent(`闪电-${regionLabel}-${ip}`);
   return `vless://${uuid}@${ip}:443?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=%2F%3Fed%3D2048#${name}`;
 }
 
@@ -67,7 +49,7 @@ function safeBtoa(str) {
       binString += String.fromCharCode(bytes[i]);
     }
     return btoa(binString);
-  } catch (e) { return ""; }
+  } catch(e) { return ""; }
 }
 
 export default {
@@ -76,31 +58,25 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
       'Content-Type': 'application/json; charset=utf-8',
     };
 
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-    const path = url.pathname.toLowerCase();
+    // 路径处理：移除末尾斜杠
+    const path = url.pathname.replace(/\/$/, '');
     const targetRegion = url.searchParams.get('region') || 'ALL';
     
     let sources = DEFAULT_SOURCES;
     if (env.IP_SOURCES) {
-      try {
-        sources = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES;
-      } catch (e) {}
+      try { sources = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES; } catch (e) {}
     }
 
     const fetchAll = async () => {
+      let results = [];
       const fetchRegion = async (reg, endpoint) => {
         try {
-          // Fix: Cast the options to any to satisfy TypeScript, as 'cf' is a Cloudflare-specific extension to fetch
-          const res = await fetch(endpoint, { 
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            cf: { cacheTtl: 600 } 
-          } as any);
-          if (!res.ok) return [];
+          const res = await fetch(endpoint);
           const data = await res.json();
           return unifyData(data, reg);
         } catch (e) { return []; }
@@ -109,51 +85,34 @@ export default {
       if (targetRegion === 'ALL') {
         const promises = Object.entries(sources).map(([reg, endpoint]) => fetchRegion(reg, endpoint));
         const all = await Promise.all(promises);
-        return all.flat().sort((a, b) => a.latency - b.latency);
+        results = all.flat();
       } else if (sources[targetRegion]) {
-        return await fetchRegion(targetRegion, sources[targetRegion]);
+        results = await fetchRegion(targetRegion, sources[targetRegion]);
       }
-      return [];
+      return results.sort((a, b) => a.latency - b.latency);
     };
 
-    // 增强型路径匹配正则
-    const isIpsRequest = /\/(ips|api\/ips)$/.test(path);
-    const isSubRequest = /\/(sub|api\/sub)$/.test(path);
-    const isBaseRequest = path === '/' || path === '/api' || path === '';
-
-    if (isIpsRequest) {
-      const results = await fetchAll();
-      return new Response(JSON.stringify({
-        success: true,
-        data: results,
-        count: results.length,
-        region: targetRegion
-      }), { status: 200, headers: corsHeaders });
+    // 路由匹配：支持带 /api 前缀或不带前缀
+    if (path === '/api/ips' || path === '/ips') {
+      const data = await fetchAll();
+      return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders });
     }
 
-    if (isSubRequest) {
-      const results = await fetchAll();
+    if (path === '/api/sub' || path === '/sub') {
+      const data = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
-      const vlessLinks = results.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
-      return new Response(safeBtoa(vlessLinks), {
+      const content = data.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
+      return new Response(safeBtoa(content), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
       });
     }
 
-    if (isBaseRequest) {
-      return new Response(JSON.stringify({ 
-        status: "online", 
-        message: "⚡ 闪电面板 API 后端已就绪",
-        debug: { path, targetRegion }
-      }), { headers: corsHeaders });
+    // 根目录提示
+    if (path === '' || path === '/' || path === '/api') {
+      return new Response(JSON.stringify({ status: "online", path }), { headers: corsHeaders });
     }
 
-    // 兜底 404
-    return new Response(JSON.stringify({ 
-      error: 'Route Not Found', 
-      path_received: path,
-      hint: "请检查 Service Binding 转发路径是否包含 /api"
-    }), { status: 404, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Not Found', path: url.pathname }), { status: 404, headers: corsHeaders });
   }
 };
