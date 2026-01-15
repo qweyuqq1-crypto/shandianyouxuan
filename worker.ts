@@ -27,20 +27,36 @@ const SNI_MAP = {
   ALL: 'ProxyIP.Global.CMLiussss.Net'
 };
 
+function fixGithubUrl(url) {
+  if (typeof url !== 'string') return url;
+  if (url.includes('github.com') && url.includes('/blob/')) {
+    return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+  }
+  return url;
+}
+
 function unifyData(raw, region) {
-  const list = Array.isArray(raw) ? raw : (raw.list || raw.data || raw.info || []);
+  if (!raw) return [];
+  // 自动寻找数组：可能是直接数组，也可能在 list, data, info 字段下
+  const list = Array.isArray(raw) ? raw : (raw.list || raw.data || raw.info || raw.nodes || []);
+  if (!Array.isArray(list)) return [];
+
   return list.map((item) => {
-    const ip = item.ip || item.address || item.ipAddress || item.IP;
+    // 兼容多种测速工具的字段名
+    const ip = item.ip || item.address || item.Address || item.ipAddress || item.IP || item.Endpoint || item.ip_address;
     if (!ip) return null;
 
-    let lat = item.latency || item.ping || 0;
+    // 某些工具 IP 带有端口号，需要剔除
+    const cleanIp = ip.split(':')[0];
+
+    let lat = item.latency || item.ping || item.Ping || item.Delay || 0;
     if (typeof lat === 'string') lat = parseInt(lat.replace(/[^0-9]/g, '')) || 0;
     
-    let spd = item.speed || item.downloadSpeed || 0;
+    let spd = item.speed || item.downloadSpeed || item.Speed || 0;
     if (typeof spd === 'string') spd = parseFloat(spd.replace(/[^0-9.]/g, '')) || 0;
 
     return {
-      ip: ip,
+      ip: cleanIp,
       latency: lat || Math.floor(Math.random() * 80) + 40,
       speed: spd > 0 ? spd : (Math.random() * 30 + 5).toFixed(2),
       region: region,
@@ -73,6 +89,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': '*',
       'Content-Type': 'application/json; charset=utf-8',
     };
 
@@ -83,33 +100,40 @@ export default {
     const path = url.pathname.replace(/\/$/, '');
     const targetRegion = url.searchParams.get('region') || 'ALL';
     
-    let sources = DEFAULT_SOURCES;
-    // 环境变量处理逻辑
+    let sources = Object.assign({}, DEFAULT_SOURCES);
+    
     if (env.IP_SOURCES) {
       try {
-        let rawJson = env.IP_SOURCES;
-        if (typeof rawJson === 'string') {
-          // 清洗逻辑
-          rawJson = rawJson.trim().replace(/^`+/, '').replace(/`+$/, '');
-          const custom = JSON.parse(rawJson);
-          sources = Object.assign({}, DEFAULT_SOURCES, custom);
-        } else {
-          sources = Object.assign({}, DEFAULT_SOURCES, env.IP_SOURCES);
+        let cleaned = env.IP_SOURCES.trim().replace(/^`+/, '').replace(/`+$/, '').replace(/'/g, '"');
+        const custom = JSON.parse(cleaned);
+        for (const key in custom) {
+          custom[key] = fixGithubUrl(custom[key]);
         }
+        sources = Object.assign(sources, custom);
       } catch (e) {
-        console.error("IP_SOURCES parse error:", e, "Raw value:", env.IP_SOURCES);
+        console.error("IP_SOURCES 解析失败");
       }
     }
 
     const fetchAll = async () => {
       const fetchOne = async (reg, endpoint) => {
         try {
-          // 移除了 TypeScript 的类型断言
-          const fetchOptions = { cf: { cacheTtl: 600 } };
-          const res = await fetch(endpoint, fetchOptions);
-          const data = await res.json();
-          return unifyData(data, reg);
+          const res = await fetch(endpoint, { cf: { cacheTtl: 60 } } as any);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          
+          const text = await res.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            throw new Error('返回内容不是有效的 JSON 格式');
+          }
+          
+          const unified = unifyData(data, reg);
+          console.log(`[${reg}] 成功加载 ${unified.length} 个节点`);
+          return unified;
         } catch (e) { 
+          console.error(`[${reg}] 抓取失败: ${endpoint} -> ${e.message}`);
           return []; 
         }
       };
@@ -117,7 +141,6 @@ export default {
       if (targetRegion === 'ALL') {
         const promises = Object.entries(sources).map(([reg, endpoint]) => fetchOne(reg, endpoint));
         const results = await Promise.all(promises);
-        // 移除了 (a as any) 断言
         return results.flat().sort((a, b) => a.latency - b.latency);
       } else if (sources[targetRegion]) {
         return await fetchOne(targetRegion, sources[targetRegion]);
@@ -136,21 +159,22 @@ export default {
       const vlessLinks = results.map((item) => generateVLESS(item.ip, item.region, uuid)).join('\n');
       return new Response(safeBtoa(vlessLinks), {
         status: 200,
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'text/plain; charset=utf-8' 
-        }
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' }
       });
     }
 
-    if (path === '' || path === '/' || path === '/api') {
-      return new Response(JSON.stringify({
-        status: "online",
-        regions: Object.keys(sources),
-        message: "Lightning Panel API is ready"
-      }), { status: 200, headers: corsHeaders });
-    }
-
-    return new Response(JSON.stringify({ error: 'Route Not Found', path }), { status: 404, headers: corsHeaders });
+    return new Response(JSON.stringify({
+      status: "online",
+      regions: Object.keys(sources),
+      usage: {
+        ips: "/api/ips?region=ALL",
+        sub: "/api/sub?region=TW"
+      },
+      env_check: {
+        has_sources: !!env.IP_SOURCES,
+        has_uuid: !!env.UUID,
+        current_sources: sources
+      }
+    }), { status: 200, headers: corsHeaders });
   }
 };
