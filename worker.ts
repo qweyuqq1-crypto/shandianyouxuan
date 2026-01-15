@@ -1,3 +1,4 @@
+
 /**
  * CLOUDFLARE WORKER 后端代码 (纯 JS 兼容版)
  */
@@ -91,7 +92,7 @@ export default {
 
     const fetchRegionData = async (reg, endpoint) => {
       try {
-        // Fix: Cast RequestInit to any because 'cf' is a Cloudflare-specific extension not present in standard TypeScript RequestInit.
+        // Fix: Using 'as any' for fetch options because the 'cf' property is unique to the Cloudflare Workers environment and is not defined in the standard RequestInit type used by the TypeScript compiler.
         const res = await fetch(endpoint, { 
           headers: { 'User-Agent': 'Mozilla/5.0' },
           cf: { cacheTtl: 300 } 
@@ -115,10 +116,18 @@ export default {
       return [];
     };
 
+    // 根路径：返回友好提示（匹配你截图中的预览效果）
     if (path === '' || path === '/api') {
-      return new Response(JSON.stringify({ status: "online", time: new Date().toISOString() }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ 
+        status: "online", 
+        message: "⚡ 闪电面板后端 API 已启动",
+        endpoints: ["/api/ips", "/api/sub"],
+        time: new Date().toISOString(),
+        hint: "提示：建议通过 Pages 域名访问以获得完整 UI 交互体验。"
+      }), { headers: corsHeaders });
     }
 
+    // IP 数据接口
     if (path === '/api/ips') {
       const results = await fetchAll();
       return new Response(JSON.stringify({
@@ -129,6 +138,7 @@ export default {
       }), { status: 200, headers: corsHeaders });
     }
 
+    // 订阅转换接口
     if (path === '/api/sub') {
       const results = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
