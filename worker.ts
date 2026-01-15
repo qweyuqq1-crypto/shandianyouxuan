@@ -27,9 +27,9 @@ const SNI_MAP = {
   ALL: 'ProxyIP.Global.CMLiussss.Net'
 };
 
-function unifyData(raw: any, region: string) {
+function unifyData(raw, region) {
   const list = Array.isArray(raw) ? raw : (raw.list || raw.data || raw.info || []);
-  return list.map((item: any) => {
+  return list.map((item) => {
     const ip = item.ip || item.address || item.ipAddress || item.IP;
     if (!ip) return null;
 
@@ -46,17 +46,17 @@ function unifyData(raw: any, region: string) {
       region: region,
       updated_at: item.updated_at || item.time || new Date().toISOString()
     };
-  }).filter((item: any) => item !== null);
+  }).filter((item) => item !== null);
 }
 
-function generateVLESS(ip: string, region: string, uuid = '00000000-0000-0000-0000-000000000000') {
-  const sni = (SNI_MAP as any)[region] || SNI_MAP.ALL;
-  const regionLabel = (REGION_NAME_MAP as any)[region] || 'CF';
+function generateVLESS(ip, region, uuid = '00000000-0000-0000-0000-000000000000') {
+  const sni = SNI_MAP[region] || SNI_MAP.ALL;
+  const regionLabel = REGION_NAME_MAP[region] || 'CF';
   const name = encodeURIComponent(`⚡-${regionLabel}-${ip}`);
   return `vless://${uuid}@${ip}:443?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=%2F%3Fed%3D2048#${name}`;
 }
 
-function safeBtoa(str: string) {
+function safeBtoa(str) {
   try {
     const bytes = new TextEncoder().encode(str);
     let binString = "";
@@ -68,7 +68,7 @@ function safeBtoa(str: string) {
 }
 
 export default {
-  async fetch(request: Request, env: any) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
@@ -89,7 +89,7 @@ export default {
       try {
         let rawJson = env.IP_SOURCES;
         if (typeof rawJson === 'string') {
-          // 清洗逻辑：去除首尾空格、去除首尾可能存在的反引号
+          // 清洗逻辑
           rawJson = rawJson.trim().replace(/^`+/, '').replace(/`+$/, '');
           const custom = JSON.parse(rawJson);
           sources = Object.assign({}, DEFAULT_SOURCES, custom);
@@ -102,11 +102,10 @@ export default {
     }
 
     const fetchAll = async () => {
-      const fetchOne = async (reg: string, endpoint: string) => {
+      const fetchOne = async (reg, endpoint) => {
         try {
-          // Fix: The 'cf' property is a Cloudflare-specific extension of RequestInit.
-          // Casting to any to satisfy TypeScript's built-in RequestInit definition.
-          const fetchOptions: any = { cf: { cacheTtl: 600 } };
+          // 移除了 TypeScript 的类型断言
+          const fetchOptions = { cf: { cacheTtl: 600 } };
           const res = await fetch(endpoint, fetchOptions);
           const data = await res.json();
           return unifyData(data, reg);
@@ -118,9 +117,10 @@ export default {
       if (targetRegion === 'ALL') {
         const promises = Object.entries(sources).map(([reg, endpoint]) => fetchOne(reg, endpoint));
         const results = await Promise.all(promises);
-        return results.flat().sort((a: any, b: any) => a.latency - b.latency);
-      } else if ((sources as any)[targetRegion]) {
-        return await fetchOne(targetRegion, (sources as any)[targetRegion]);
+        // 移除了 (a as any) 断言
+        return results.flat().sort((a, b) => a.latency - b.latency);
+      } else if (sources[targetRegion]) {
+        return await fetchOne(targetRegion, sources[targetRegion]);
       }
       return [];
     };
@@ -133,7 +133,7 @@ export default {
     if (path === '/api/sub' || path === '/sub') {
       const results = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
-      const vlessLinks = results.map((item: any) => generateVLESS(item.ip, item.region, uuid)).join('\n');
+      const vlessLinks = results.map((item) => generateVLESS(item.ip, item.region, uuid)).join('\n');
       return new Response(safeBtoa(vlessLinks), {
         status: 200,
         headers: { 
