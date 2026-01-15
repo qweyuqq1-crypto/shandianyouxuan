@@ -1,15 +1,14 @@
-
 /**
  * CLOUDFLARE WORKER 后端代码
  * 纯 JavaScript 实现 (兼容 Cloudflare Worker 编辑器直接粘贴)
  */
 
-// 默认数据源
+// 默认数据源 - 已指向你的仓库: qweyuqq1-crypto/shandianyouxuan
 const DEFAULT_SOURCES = {
-  HK: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/HK.json',
-  JP: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/JP.json',
-  TW: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/TW.json',
-  KR: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/KR.json',
+  HK: 'https://raw.githubusercontent.com/qweyuqq1-crypto/shandianyouxuan/main/HK.json',
+  JP: 'https://raw.githubusercontent.com/qweyuqq1-crypto/shandianyouxuan/main/JP.json',
+  TW: 'https://raw.githubusercontent.com/qweyuqq1-crypto/shandianyouxuan/main/TW.json',
+  KR: 'https://raw.githubusercontent.com/qweyuqq1-crypto/shandianyouxuan/main/KR.json',
 };
 
 const REGION_NAME_MAP = {
@@ -47,7 +46,7 @@ function unifyData(raw, region) {
     const ip = item.ip || item.address || item.Address || item.ipAddress || item.Endpoint;
     if (!ip) return null;
 
-    // 格式化 IP：只剔除端口，保留 CIDR 斜杠(虽然代理不可用，但让面板能显示出来方便排查)
+    // 格式化 IP：只剔除端口
     const cleanIp = ip.split(':')[0];
 
     let lat = item.latency || item.ping || 0;
@@ -119,12 +118,12 @@ export default {
     const fetchAll = async () => {
       const fetchOne = async (reg, endpoint) => {
         try {
-          // 增加 User-Agent，防止 GitHub 拦截
-          // Fix: Cast RequestInit to any to support Cloudflare-specific 'cf' property which is missing from standard types
-          const res = await fetch(endpoint, { 
+          const fetchOptions = { 
             headers: { 'User-Agent': 'Cloudflare-Worker-Lightning-Panel' },
             cf: { cacheTtl: 60 } 
-          } as any);
+          };
+          
+          const res = await fetch(endpoint, fetchOptions);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           
           const data = await res.json();
@@ -160,7 +159,6 @@ export default {
       });
     }
 
-    // 默认返回状态
     return new Response(JSON.stringify({
       status: "online",
       regions: Object.keys(sources),
