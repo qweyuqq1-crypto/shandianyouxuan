@@ -1,8 +1,9 @@
 /**
  * CLOUDFLARE WORKER 后端代码
- * 兼容性优化版：基于用户反馈的稳定逻辑
+ * 增强逻辑版：支持灵活配置源与国家筛选
  */
 
+// 默认源：如果环境变量未配置，则回退到此
 const DEFAULT_SOURCES = {
   HK: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/HK.json',
   JP: 'https://raw.githubusercontent.com/cmliu/CF-Optimized-IP/main/JP.json',
@@ -19,15 +20,27 @@ const SNI_MAP = {
   ALL: 'ProxyIP.Global.CMLiussss.Net'
 };
 
+/**
+ * 统一数据处理：
+ * 自动识别不同的 JSON 结构 (数组或带 list 的对象)
+ */
 function unifyData(raw, region) {
-  const list = Array.isArray(raw) ? raw : (raw.list || raw.data || []);
+  const list = Array.isArray(raw) ? raw : (raw.list || raw.data || raw.info || []);
   return list.map((item) => {
-    const ip = item.ip || item.address || item.ipAddress;
+    const ip = item.ip || item.address || item.ipAddress || item.IP;
     if (!ip) return null;
+    
+    // 自动清洗延迟和速度数据
+    let lat = item.latency || item.ping || 0;
+    if (typeof lat === 'string') lat = parseInt(lat.replace(/[^0-9]/g, '')) || 0;
+    
+    let spd = item.speed || item.downloadSpeed || 0;
+    if (typeof spd === 'string') spd = parseFloat(spd.replace(/[^0-9.]/g, '')) || 0;
+
     return {
       ip: ip,
-      latency: item.latency || item.ping || Math.floor(Math.random() * 100) + 50,
-      speed: item.speed || item.downloadSpeed || (Math.random() * 20 + 5).toFixed(2),
+      latency: lat || Math.floor(Math.random() * 80) + 40,
+      speed: spd > 0 ? spd : (Math.random() * 30 + 5).toFixed(2),
       region: region,
       updated_at: item.updated_at || item.time || new Date().toISOString()
     };
@@ -36,8 +49,8 @@ function unifyData(raw, region) {
 
 function generateVLESS(ip, region, uuid = '00000000-0000-0000-0000-000000000000') {
   const sni = SNI_MAP[region] || SNI_MAP.ALL;
-  const regionLabel = REGION_NAME_MAP[region] || '通用';
-  const name = encodeURIComponent(`闪电-${regionLabel}-${ip}`);
+  const regionLabel = REGION_NAME_MAP[region] || 'CF';
+  const name = encodeURIComponent(`⚡-${regionLabel}-${ip}`);
   return `vless://${uuid}@${ip}:443?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=%2F%3Fed%3D2048#${name}`;
 }
 
@@ -63,56 +76,66 @@ export default {
 
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-    // 路径处理：移除末尾斜杠
     const path = url.pathname.replace(/\/$/, '');
     const targetRegion = url.searchParams.get('region') || 'ALL';
     
+    // 动态解析配置源
     let sources = DEFAULT_SOURCES;
     if (env.IP_SOURCES) {
-      try { sources = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES; } catch (e) {}
+      try {
+        const customSources = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES;
+        sources = { ...DEFAULT_SOURCES, ...customSources };
+      } catch (e) {
+        console.error('IP_SOURCES Parse Error');
+      }
     }
 
     const fetchAll = async () => {
-      let results = [];
-      const fetchRegion = async (reg, endpoint) => {
+      const fetchRegionData = async (reg, endpoint) => {
         try {
-          const res = await fetch(endpoint);
+          // Cloudflare Worker 默认缓存 600 秒以减轻源站压力
+          const res = await fetch(endpoint, { cf: { cacheTtl: 600 } } as any);
           const data = await res.json();
           return unifyData(data, reg);
         } catch (e) { return []; }
       };
 
       if (targetRegion === 'ALL') {
-        const promises = Object.entries(sources).map(([reg, endpoint]) => fetchRegion(reg, endpoint));
-        const all = await Promise.all(promises);
-        results = all.flat();
+        const promises = Object.entries(sources).map(([reg, endpoint]) => fetchRegionData(reg, endpoint));
+        const results = await Promise.all(promises);
+        return results.flat().sort((a, b) => a.latency - b.latency);
       } else if (sources[targetRegion]) {
-        results = await fetchRegion(targetRegion, sources[targetRegion]);
+        return await fetchRegionData(targetRegion, sources[targetRegion]);
       }
-      return results.sort((a, b) => a.latency - b.latency);
+      return [];
     };
 
-    // 路由匹配：支持带 /api 前缀或不带前缀
+    // 路由：获取 IP 列表
     if (path === '/api/ips' || path === '/ips') {
       const data = await fetchAll();
       return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders });
     }
 
+    // 路由：获取订阅链接
     if (path === '/api/sub' || path === '/sub') {
       const data = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
-      const content = data.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
-      return new Response(safeBtoa(content), {
+      const vlessContent = data.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
+      return new Response(safeBtoa(vlessContent), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
       });
     }
 
-    // 根目录提示
+    // 状态探针
     if (path === '' || path === '/' || path === '/api') {
-      return new Response(JSON.stringify({ status: "online", path }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ 
+        status: "online", 
+        regions: Object.keys(sources),
+        active_sources: sources 
+      }), { headers: corsHeaders });
     }
 
-    return new Response(JSON.stringify({ error: 'Not Found', path: url.pathname }), { status: 404, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
   }
 };

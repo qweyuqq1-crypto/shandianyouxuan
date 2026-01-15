@@ -1,35 +1,27 @@
+# 部署与配置深度指南
 
-# 部署指南 - 闪电面板 (Lightning Panel)
+## 1. 准备数据源 (JSON 文件)
+你需要准备若干个 JSON 文件。你可以将它们上传到 GitHub 仓库并使用 `raw` 链接。
 
-本系统采用 **Cloudflare Pages (前端)** + **Cloudflare Workers (后端 API)** 的架构。
+**推荐的 JSON 结构：**
+```json
+[
+  { "ip": "1.1.1.1", "latency": 50, "speed": 25.5 },
+  { "ip": "1.0.0.1", "latency": 60, "speed": 18.2 }
+]
+```
 
-## 1. 部署后端 (Workers)
-1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)。
-2. 进入 **Workers & Pages** -> **Create application** -> **Create Worker**。
-3. 将 `worker.ts` (纯 JS 兼容版) 中的代码粘贴到编辑器并 **Save and Deploy**。
-4. **设置环境变量**：
-   - 进入 Worker -> **Settings** -> **Variables**。
-   - 添加 `UUID`：填入你的 VLESS 用户 ID（重要：不设置此项链接将无效）。
-   - 添加 `IP_SOURCES`：填入自定义 JSON 源（可选）。
+## 2. 配置 Worker 环境变量
+在 Cloudflare 控制台的 **Settings -> Variables** 中配置以下内容：
 
-## 2. 关于节点数据 (IP 从哪来？)
-面板默认集成了社区公共测速源，如果你想使用自己的数据：
+| 变量名 | 示例值 | 说明 |
+| :--- | :--- | :--- |
+| `UUID` | `你的-VLESS-UUID` | 必填，用于生成节点链接 |
+| `IP_SOURCES` | `{"HK":"https://raw.../hk.json", "JP":"..."}` | 选填，覆盖默认的 GitHub 数据源 |
 
-### A. 使用社区源 (默认)
-代码中已内置 `cmliu/CF-Optimized-IP` 的测速结果。
+## 3. 国家筛选逻辑
+面板会自动根据 URL 参数 `?region=HK` 向 Worker 发起请求。Worker 会根据 `IP_SOURCES` 中定义的键值对去抓取对应的 JSON 文件。
 
-### B. 自行测速并发布 (推荐)
-1. 使用工具 [CloudflareSpeedTest](https://github.com/XIU2/CloudflareSpeedTest) 在本地进行测速。
-2. 将得到的 `result.csv` 转换为 JSON 格式（包含 `ip`, `latency` 等字段）。
-3. 将 JSON 文件上传至 GitHub Gist 或 Web 服务器。
-4. 将该链接配置到 Worker 的 `IP_SOURCES` 变量中。格式：
-   `{"HK":"链接1","JP":"链接2"}`
-
-## 3. 绑定前后端 (关键步骤)
-1. 进入 **Pages 项目** -> **Settings** -> **Functions**。
-2. 在 **Service Bindings** 处添加绑定。
-3. **Variable name** 填 `API`，**Service** 选择你的 Worker。
-
-## 4. 常见问题
-- **节点连不上**: 检查 UUID 是否匹配你的后端服务器。
-- **数据不更新**: 检查 `IP_SOURCES` 的 URL 是否能正常访问（Raw 链接）。
+**注意：** 
+- 如果你新增了国家（比如美国 US），只需在 `IP_SOURCES` 中添加 `"US": "url"`。
+- 同时在前端 `constants.tsx` 的 `REGION_CONFIG` 中同步添加对应的图标和标签即可显示在页面上。
