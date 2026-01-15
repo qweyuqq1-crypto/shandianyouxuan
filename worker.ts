@@ -1,6 +1,6 @@
 /**
- * CLOUDFLARE WORKER 后端代码 (纯 JS 兼容版)
- * 修复了 TypeScript 语法导致的部署错误
+ * CLOUDFLARE WORKER 后端代码
+ * 纯 JavaScript 实现 (兼容 Cloudflare Worker 编辑器直接粘贴)
  */
 
 // 默认数据源
@@ -27,18 +27,15 @@ const SNI_MAP = {
   ALL: 'ProxyIP.Global.CMLiussss.Net'
 };
 
-function unifyData(raw, region) {
-  // 兼容多种 JSON 结构
+function unifyData(raw: any, region: string) {
   const list = Array.isArray(raw) ? raw : (raw.list || raw.data || raw.info || []);
-  return list.map((item) => {
+  return list.map((item: any) => {
     const ip = item.ip || item.address || item.ipAddress || item.IP;
     if (!ip) return null;
 
-    // 清洗延迟数据
     let lat = item.latency || item.ping || 0;
     if (typeof lat === 'string') lat = parseInt(lat.replace(/[^0-9]/g, '')) || 0;
     
-    // 清洗速度数据
     let spd = item.speed || item.downloadSpeed || 0;
     if (typeof spd === 'string') spd = parseFloat(spd.replace(/[^0-9.]/g, '')) || 0;
 
@@ -49,17 +46,17 @@ function unifyData(raw, region) {
       region: region,
       updated_at: item.updated_at || item.time || new Date().toISOString()
     };
-  }).filter(item => item !== null);
+  }).filter((item: any) => item !== null);
 }
 
-function generateVLESS(ip, region, uuid = '00000000-0000-0000-0000-000000000000') {
-  const sni = SNI_MAP[region] || SNI_MAP.ALL;
-  const regionLabel = REGION_NAME_MAP[region] || 'CF';
+function generateVLESS(ip: string, region: string, uuid = '00000000-0000-0000-0000-000000000000') {
+  const sni = (SNI_MAP as any)[region] || SNI_MAP.ALL;
+  const regionLabel = (REGION_NAME_MAP as any)[region] || 'CF';
   const name = encodeURIComponent(`⚡-${regionLabel}-${ip}`);
   return `vless://${uuid}@${ip}:443?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=%2F%3Fed%3D2048#${name}`;
 }
 
-function safeBtoa(str) {
+function safeBtoa(str: string) {
   try {
     const bytes = new TextEncoder().encode(str);
     let binString = "";
@@ -71,7 +68,7 @@ function safeBtoa(str) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request: Request, env: any) {
     const url = new URL(request.url);
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
@@ -83,51 +80,60 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // 路由处理：统一去掉末尾斜杠
     const path = url.pathname.replace(/\/$/, '');
     const targetRegion = url.searchParams.get('region') || 'ALL';
     
-    // 配置源优先级：环境变量 IP_SOURCES > 默认值
     let sources = DEFAULT_SOURCES;
+    // 环境变量处理逻辑
     if (env.IP_SOURCES) {
       try {
-        const custom = typeof env.IP_SOURCES === 'string' ? JSON.parse(env.IP_SOURCES) : env.IP_SOURCES;
-        sources = Object.assign({}, DEFAULT_SOURCES, custom);
-      } catch (e) {}
+        let rawJson = env.IP_SOURCES;
+        if (typeof rawJson === 'string') {
+          // 清洗逻辑：去除首尾空格、去除首尾可能存在的反引号
+          rawJson = rawJson.trim().replace(/^`+/, '').replace(/`+$/, '');
+          const custom = JSON.parse(rawJson);
+          sources = Object.assign({}, DEFAULT_SOURCES, custom);
+        } else {
+          sources = Object.assign({}, DEFAULT_SOURCES, env.IP_SOURCES);
+        }
+      } catch (e) {
+        console.error("IP_SOURCES parse error:", e, "Raw value:", env.IP_SOURCES);
+      }
     }
 
     const fetchAll = async () => {
-      const fetchOne = async (reg, endpoint) => {
+      const fetchOne = async (reg: string, endpoint: string) => {
         try {
-          // 在 Worker 环境中，fetch 的第二个参数可以包含 cf 对象进行缓存优化
-          // Fix: Cast to any to bypass TypeScript's standard RequestInit check as 'cf' is a Cloudflare-specific extension
-          const res = await fetch(endpoint, { cf: { cacheTtl: 600 } } as any);
+          // Fix: The 'cf' property is a Cloudflare-specific extension of RequestInit.
+          // Casting to any to satisfy TypeScript's built-in RequestInit definition.
+          const fetchOptions: any = { cf: { cacheTtl: 600 } };
+          const res = await fetch(endpoint, fetchOptions);
           const data = await res.json();
           return unifyData(data, reg);
-        } catch (e) { return []; }
+        } catch (e) { 
+          return []; 
+        }
       };
 
       if (targetRegion === 'ALL') {
         const promises = Object.entries(sources).map(([reg, endpoint]) => fetchOne(reg, endpoint));
         const results = await Promise.all(promises);
-        return results.flat().sort((a, b) => a.latency - b.latency);
-      } else if (sources[targetRegion]) {
-        return await fetchOne(targetRegion, sources[targetRegion]);
+        return results.flat().sort((a: any, b: any) => a.latency - b.latency);
+      } else if ((sources as any)[targetRegion]) {
+        return await fetchOne(targetRegion, (sources as any)[targetRegion]);
       }
       return [];
     };
 
-    // 匹配路由 /api/ips 或 /ips
     if (path === '/api/ips' || path === '/ips') {
       const results = await fetchAll();
       return new Response(JSON.stringify(results), { status: 200, headers: corsHeaders });
     }
 
-    // 匹配路由 /api/sub 或 /sub
     if (path === '/api/sub' || path === '/sub') {
       const results = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
-      const vlessLinks = results.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
+      const vlessLinks = results.map((item: any) => generateVLESS(item.ip, item.region, uuid)).join('\n');
       return new Response(safeBtoa(vlessLinks), {
         status: 200,
         headers: { 
@@ -137,7 +143,6 @@ export default {
       });
     }
 
-    // 根目录或 /api 提示
     if (path === '' || path === '/' || path === '/api') {
       return new Response(JSON.stringify({
         status: "online",

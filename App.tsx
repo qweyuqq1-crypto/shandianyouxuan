@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCcw, Database, Info, Share2, Check, Copy, Zap, Activity, ShieldCheck, Cpu, Globe, Lock } from 'lucide-react';
+import { RefreshCcw, Database, Info, Share2, Check, Copy, Zap, Activity, ShieldCheck, Cpu, Globe, ExternalLink } from 'lucide-react';
 import { Region, IPData, IPStats } from './types';
 import { REGION_CONFIG } from './constants';
 import { fetchIPs } from './services/api';
@@ -180,14 +180,19 @@ const App: React.FC = () => {
                  <Globe className="w-4 h-4 text-blue-400" />
                  测速数据源
                </h3>
-               <div className="space-y-3">
+               <div className="space-y-4">
                  <div className="flex items-start gap-3">
                    <div className="p-2 bg-white/5 rounded-lg border border-white/10 mt-0.5">
                      <Info className="w-3 h-3 text-slate-400" />
                    </div>
-                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                     当前采用 <span className="text-blue-400">cmliu/CF-Optimized-IP</span> 社区公共测速源，每小时自动更新。
-                   </p>
+                   <div className="flex flex-col gap-2">
+                     <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                       默认来自 <a href="https://github.com/cmliu/CF-Optimized-IP" target="_blank" className="text-blue-400 hover:underline inline-flex items-center gap-0.5">cmliu <ExternalLink className="w-2 h-2" /></a> 开源项目。
+                     </p>
+                     <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                       你也可以使用 <a href="https://github.com/XIU2/CloudflareST" target="_blank" className="text-yellow-400 hover:underline inline-flex items-center gap-0.5">CloudflareST <ExternalLink className="w-2 h-2" /></a> 本地扫描并上传。
+                     </p>
+                   </div>
                  </div>
                  <div className="flex items-center gap-2 px-3 py-2 bg-green-500/5 border border-green-500/10 rounded-xl">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
