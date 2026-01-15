@@ -1,6 +1,6 @@
-
 /**
- * CLOUDFLARE WORKER 后端代码 (纯 JS 兼容版)
+ * CLOUDFLARE WORKER 后端代码
+ * 优化版：增强路径兼容性，解决 404 错误
  */
 
 const DEFAULT_SOURCES = {
@@ -19,41 +19,25 @@ const SNI_MAP = {
   ALL: 'ProxyIP.Global.CMLiussss.Net'
 };
 
-/**
- * 深度归一化函数
- */
 function unifyData(raw, region) {
-  let list = [];
-  if (Array.isArray(raw)) {
-    list = raw;
-  } else if (raw && typeof raw === 'object') {
-    list = raw.list || raw.data || raw.info || raw.ips || [];
-  }
-
+  const list = Array.isArray(raw) ? raw : (raw.list || raw.data || raw.info || []);
   return list.map((item) => {
-    const ip = item.ip || item.address || item.ipAddress || item.IP || item.Address;
+    const ip = item.ip || item.address || item.ipAddress;
     if (!ip) return null;
-
-    let latency = item.latency || item.ping || item.Time || 0;
-    if (typeof latency === 'string') latency = parseInt(latency.replace(/[^0-9]/g, ''));
-    
-    let speed = item.speed || item.downloadSpeed || item.Speed || 0;
-    if (typeof speed === 'string') speed = parseFloat(speed.replace(/[^0-9.]/g, ''));
-
     return {
       ip: ip,
-      latency: latency || Math.floor(Math.random() * 150) + 50,
-      speed: speed || (Math.random() * 40 + 10).toFixed(2),
+      latency: item.latency || item.ping || Math.floor(Math.random() * 150) + 50,
+      speed: item.speed || item.downloadSpeed || (Math.random() * 40 + 10).toFixed(2),
       region: region,
       updated_at: item.updated_at || item.time || new Date().toISOString()
     };
-  }).filter(Boolean);
+  }).filter(item => item !== null);
 }
 
 function generateVLESS(ip, region, uuid) {
   const sni = SNI_MAP[region] || SNI_MAP.ALL;
   const regionLabel = REGION_NAME_MAP[region] || '通用';
-  const name = encodeURIComponent(`⚡-${regionLabel}-${ip}`);
+  const name = encodeURIComponent(`闪电-${regionLabel}-${ip}`);
   return `vless://${uuid}@${ip}:443?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=%2F%3Fed%3D2048#${name}`;
 }
 
@@ -80,7 +64,10 @@ export default {
 
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-    const path = url.pathname.replace(/\/$/, '');
+    // 处理路径：去掉结尾斜杠，并处理可能的 /api 前缀
+    let path = url.pathname.replace(/\/$/, '');
+    if (path === '') path = '/';
+
     const targetRegion = url.searchParams.get('region') || 'ALL';
     
     let sources = DEFAULT_SOURCES;
@@ -90,56 +77,45 @@ export default {
       } catch (e) {}
     }
 
-    const fetchRegionData = async (reg, endpoint) => {
-      try {
-        // Fix: Using 'as any' for fetch options because the 'cf' property is unique to the Cloudflare Workers environment and is not defined in the standard RequestInit type used by the TypeScript compiler.
-        const res = await fetch(endpoint, { 
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          cf: { cacheTtl: 300 } 
-        } as any);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return unifyData(data, reg);
-      } catch (e) { return []; }
-    };
-
     const fetchAll = async () => {
+      let results = [];
+      const fetchRegion = async (reg, endpoint) => {
+        try {
+          const res = await fetch(endpoint, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const data = await res.json();
+          return unifyData(data, reg);
+        } catch (e) { return []; }
+      };
+
       if (targetRegion === 'ALL') {
-        const fetchPromises = Object.entries(sources).map(([reg, endpoint]) => fetchRegionData(reg, endpoint));
-        const allRes = await Promise.all(fetchPromises);
-        let combined = [];
-        for (const res of allRes) combined = combined.concat(res);
-        return combined.sort((a, b) => a.latency - b.latency);
+        const promises = Object.entries(sources).map(([reg, endpoint]) => fetchRegion(reg, endpoint));
+        const all = await Promise.all(promises);
+        results = all.flat();
       } else if (sources[targetRegion]) {
-        return await fetchRegionData(targetRegion, sources[targetRegion]);
+        results = await fetchRegion(targetRegion, sources[targetRegion]);
       }
-      return [];
+      return results.sort((a, b) => a.latency - b.latency);
     };
 
-    // 根路径：返回友好提示（匹配你截图中的预览效果）
-    if (path === '' || path === '/api') {
+    // 路由判断：同时兼容 /api/ips 和 /ips
+    if (path === '/' || path === '/api') {
       return new Response(JSON.stringify({ 
         status: "online", 
-        message: "⚡ 闪电面板后端 API 已启动",
-        endpoints: ["/api/ips", "/api/sub"],
-        time: new Date().toISOString(),
-        hint: "提示：建议通过 Pages 域名访问以获得完整 UI 交互体验。"
+        message: "闪电面板后端已就绪",
+        endpoints: ["/api/ips", "/api/sub"]
       }), { headers: corsHeaders });
     }
 
-    // IP 数据接口
-    if (path === '/api/ips') {
+    if (path === '/api/ips' || path === '/ips') {
       const results = await fetchAll();
       return new Response(JSON.stringify({
         success: true,
-        count: results.length,
         data: results,
-        region: targetRegion
+        count: results.length
       }), { status: 200, headers: corsHeaders });
     }
 
-    // 订阅转换接口
-    if (path === '/api/sub') {
+    if (path === '/api/sub' || path === '/sub') {
       const results = await fetchAll();
       const uuid = env.UUID || '00000000-0000-0000-0000-000000000000';
       const vlessLinks = results.map(item => generateVLESS(item.ip, item.region, uuid)).join('\n');
@@ -149,6 +125,10 @@ export default {
       });
     }
 
-    return new Response(JSON.stringify({ error: 'Route Not Found', path }), { status: 404, headers: corsHeaders });
+    return new Response(JSON.stringify({ 
+      error: 'Route Not Found', 
+      requested_path: path,
+      hint: "检查 Service Binding 转发的路径是否正确"
+    }), { status: 404, headers: corsHeaders });
   }
 };
